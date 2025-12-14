@@ -4,7 +4,7 @@ from typing import Optional
 
 # import pkg_resources
 try:
-    from importlib.metadata import version, PackageNotFoundError
+    from importlib import resources
 except ImportError:  # Python<3.8 fallback
     from pkg_resources import get_distribution as version
 
@@ -146,9 +146,15 @@ def get_config_file(config_path):
     Returns:
         str: the real path to the config file.
     """
-    cfg_file = pkg_resources.resource_filename(
-        "detectron2.model_zoo", os.path.join("configs", config_path)
+    # BEGIN EDIT
+    # cfg_file = pkg_resources.resource_filename(
+    #     "detectron2.model_zoo", os.path.join("configs", config_path)
+    # )
+    cfg_file = str(
+        resources.files("detectron2.model_zoo").joinpath("configs", config_path)
     )
+    # END EDIT
+
     if not os.path.exists(cfg_file):
         raise RuntimeError("{} not available in Model Zoo!".format(config_path))
     return cfg_file

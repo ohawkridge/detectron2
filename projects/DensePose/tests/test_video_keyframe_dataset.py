@@ -19,7 +19,10 @@ except ImportError:
 
 # copied from torchvision test/test_io.py
 def _create_video_frames(num_frames, height, width):
-    y, x = torch.meshgrid(torch.linspace(-2, 2, height), torch.linspace(-2, 2, width))
+    # y, x = torch.meshgrid(torch.linspace(-2, 2, height), torch.linspace(-2, 2, width))
+    y, x = torch.meshgrid(
+        torch.linspace(-2, 2, height), torch.linspace(-2, 2, width), indexing="ij"
+    )
     data = []
     for i in range(num_frames):
         xc = float(i) / num_frames
@@ -31,7 +34,9 @@ def _create_video_frames(num_frames, height, width):
 
 # adapted from torchvision test/test_io.py
 @contextlib.contextmanager
-def temp_video(num_frames, height, width, fps, lossless=False, video_codec=None, options=None):
+def temp_video(
+    num_frames, height, width, fps, lossless=False, video_codec=None, options=None
+):
     if lossless:
         if video_codec is not None:
             raise ValueError("video_codec can't be specified together with lossless")
@@ -88,7 +93,9 @@ class TestVideoKeyframeDataset(unittest.TestCase):
             random.seed(0)
             frame_selector = RandomKFramesSelector(1)
             transform = ImageResizeTransform()
-            dataset = VideoKeyframeDataset(video_list, category_list, frame_selector, transform)
+            dataset = VideoKeyframeDataset(
+                video_list, category_list, frame_selector, transform
+            )
             data1, categories1 = dataset[0]["images"], dataset[0]["categories"]
             self.assertEqual(len(dataset), 1)
             self.assertEqual(data1.shape, torch.Size((1, 3, 800, 800)))

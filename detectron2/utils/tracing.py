@@ -3,12 +3,33 @@ import torch
 
 from detectron2.utils.env import TORCH_VERSION
 
-try:
-    from torch.fx._symbolic_trace import is_fx_tracing as is_fx_tracing_current
+# BEGIN EDIT
+# try:
+#     from torch.fx._symbolic_trace import is_fx_tracing as is_fx_tracing_current
 
-    tracing_current_exists = True
-except ImportError:
+#     tracing_current_exists = True
+# except ImportError:
+#     tracing_current_exists = False
+
+tracing_current_exists = False
+
+# Prefer the new, specific FX symbolic-trace predicate when available
+tracing_current_exists = False
+is_fx_tracing_current = None  # type: ignore[assignment]
+
+try:
+    import torch.fx._symbolic_trace as _st
+
+    # Prefer the newer, more specific API when present (Torch 2.9+ warns about this).
+    is_fx_tracing_current = getattr(_st, "is_fx_tracing_symbolic_tracing", None)
+    if is_fx_tracing_current is None:
+        is_fx_tracing_current = getattr(_st, "is_fx_tracing", None)
+
+    tracing_current_exists = callable(is_fx_tracing_current)
+except Exception:
     tracing_current_exists = False
+
+# END EDIT
 
 try:
     from torch.fx._symbolic_trace import _orig_module_call
@@ -27,19 +48,55 @@ def is_fx_tracing_legacy() -> bool:
     return torch.nn.Module.__call__ is not _orig_module_call
 
 
+# BEGIN EDIT
+# def is_fx_tracing() -> bool:
+#     """Returns whether execution is currently in
+#     Torch FX tracing mode"""
+#     if torch.jit.is_scripting():
+#         return False
+#     if TORCH_VERSION >= (1, 10) and tracing_current_exists:
+#         return is_fx_tracing_current()
+#     elif tracing_legacy_exists:
+#         return is_fx_tracing_legacy()
+#     else:
+#         # Can't find either current or legacy tracing indication code.
+#         # Enabling this assert_fx_safe() call regardless of tracing status.
+#         return False
+
+
 def is_fx_tracing() -> bool:
-    """Returns whether execution is currently in
-    Torch FX tracing mode"""
+    """Returns whether execution is currently in a Torch FX tracing / compile context."""
     if torch.jit.is_scripting():
         return False
-    if TORCH_VERSION >= (1, 10) and tracing_current_exists:
-        return is_fx_tracing_current()
-    elif tracing_legacy_exists:
-        return is_fx_tracing_legacy()
-    else:
-        # Can't find either current or legacy tracing indication code.
-        # Enabling this assert_fx_safe() call regardless of tracing status.
-        return False
+
+    fx_symtrace = False
+    if (
+        TORCH_VERSION >= (1, 10)
+        and tracing_current_exists
+        and is_fx_tracing_current is not None
+    ):
+        fx_symtrace = bool(is_fx_tracing_current())
+
+    compiling = False
+
+    try:
+        # import torch.compiler  # DON'T USE - CREATES NEW LOCAL 'torch' WHICH UNBINDS PyTorch!!
+        from torch import compiler as _compiler  # WARNING
+
+        compiling = _compiler.is_compiling()
+    except Exception:
+        compiling = False
+
+    if fx_symtrace or compiling:
+        return True
+
+    if tracing_legacy_exists:
+        return bool(is_fx_tracing_legacy())
+
+    return False
+
+
+# END EDIT
 
 
 def assert_fx_safe(condition: bool, message: str) -> torch.Tensor:
@@ -61,7 +118,9 @@ def _do_assert_fx_safe(condition: bool, message: str) -> torch.Tensor:
     try:
         if isinstance(condition, str):
             caller_frame = inspect.currentframe().f_back
-            torch._assert(eval(condition, caller_frame.f_globals, caller_frame.f_locals), message)
+            torch._assert(
+                eval(condition, caller_frame.f_globals, caller_frame.f_locals), message
+            )
             return torch.ones(1)
         else:
             torch._assert(condition, message)
