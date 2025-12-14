@@ -1,7 +1,15 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
 import os
 from typing import Optional
-import pkg_resources
+
+# import pkg_resources
+try:
+    from importlib.metadata import version, PackageNotFoundError
+except ImportError:  # Python<3.8 fallback
+    from pkg_resources import get_distribution as version
+
+    PackageNotFoundError = Exception
+
 import torch
 
 from detectron2.checkpoint import DetectionCheckpointer
@@ -121,7 +129,9 @@ def get_checkpoint_url(config_path):
     """
     url = _ModelZooUrls.query(config_path)
     if url is None:
-        raise RuntimeError("Pretrained model for {} is not available!".format(config_path))
+        raise RuntimeError(
+            "Pretrained model for {} is not available!".format(config_path)
+        )
     return url
 
 
